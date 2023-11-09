@@ -1,0 +1,5 @@
+.goreleaser.yml
+.idea
+__pycache__
+*.h264
+*.jpg
