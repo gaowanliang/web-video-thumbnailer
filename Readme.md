@@ -1,7 +1,7 @@
 # Web Video Thumbnailer
 For a web video that can be downloaded in segments, it is possible to create an overview of the video by downloading only a small amount of binary data.
 
-![](img/merged_image.jpg)
+![](img/merged_image.webp)
 
 # requirements
 - Python 3.6+
