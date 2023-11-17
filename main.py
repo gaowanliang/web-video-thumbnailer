@@ -3,14 +3,13 @@ import struct
 import os
 import subprocess
 import merge
-import seiNalu
+import naluUtil
 
 
 # set proxy / 设置代理
 proxy = {}
 
-url = "http://127.0.0.1:16666/test.mp4"  # web video url / 网络视频地址
-
+url = "http://127.0.0.1:16666/2.mp4"  # web video url / 网络视频地址
 
 
 videoSeconds = 0
@@ -157,7 +156,7 @@ def getSampleOfChunkInfo(data, stuckHeader):
                     )[0],
                 }
             )
-        
+
         return
 
     if data.find(b"stsc") > 0:  # 如果数据块中包含stsc字符串
@@ -574,6 +573,22 @@ print(f"I Frame:{videoIFrameNumber}")
 
 secondList = []
 
+if len(videoSampleOfChunkInfo) <= 1:
+    # 找到中间的I帧
+    middleIFrame = videoIFrameNumber[int(len(videoIFrameNumber) / 3)]
+    print(f"中间的I帧：{middleIFrame}")
+    # 获取这个I帧的偏移
+    offset = videoChunkOffset[middleIFrame - 1]
+    # 获取这个I帧的大小
+    middleIFrameSize = videoSampleOfChunk[middleIFrame - 1]
+    nextIFrame = videoIFrameNumber[int(len(videoIFrameNumber) / 3) + 1]
+    # 获取下一个I帧的偏移
+    nextOffset = videoChunkOffset[nextIFrame - 1]
+    print(
+        f"中间的I帧偏移：{offset}, 大小：{middleIFrameSize}，大小+偏移：{offset+middleIFrameSize}，下一个I帧偏移：{nextOffset-offset+middleIFrameSize}"
+    )
+
+
 for imageIndex in range(21):
     time = int(videoSeconds / 21 * imageIndex)
     secondList.append(time)
@@ -585,16 +600,12 @@ for imageIndex in range(21):
     sampleNum = int(timeScale / videoSampleDelta[0]["sample_delta"])
 
     previousIFrame = 0
-    nextIFrame = 0
     # 找到距离最近的两个I帧，将其夹在中间
     for i in range(len(videoIFrameNumber)):
         if videoIFrameNumber[i] <= sampleNum:
             previousIFrame = videoIFrameNumber[i]
-        if videoIFrameNumber[i] > sampleNum:
-            nextIFrame = videoIFrameNumber[i]
-            break
 
-    print(sampleNum, videoTimeScale, previousIFrame, nextIFrame)
+    print(f"计算出的最接近选中时间的帧序号{sampleNum}, 前一个I帧序号{previousIFrame}")
 
     # 从前后10帧中找到数据量最大的帧
 
@@ -627,6 +638,9 @@ for imageIndex in range(21):
                     iFrameData += data
             else:
                 break
+        iFrameData = naluUtil.sampleNaluSeparate(
+            iFrameData, videoSampleOfChunk[sampleNum - 1]
+        )
 
         if sampleNum != previousIFrame:
             headers = {"Range": f"bytes={videoChunkOffset[previousIFrame-1]}-"}
@@ -643,6 +657,9 @@ for imageIndex in range(21):
                         tempData += data
                 else:
                     break
+            tempData = naluUtil.sampleNaluSeparate(
+                tempData, videoSampleOfChunk[previousIFrame - 1]
+            )
             iFrameData = tempData + h264Sign + iFrameData[4:]
     else:
         print(sampleNum, formatChunkOffset[sampleNum])
@@ -666,6 +683,9 @@ for imageIndex in range(21):
                     iFrameData += data
             else:
                 break
+        iFrameData = naluUtil.sampleNaluSeparate(
+            iFrameData, videoSampleOfChunk[sampleNum]
+        )
 
         if sampleNum != previousIFrame:
             print(previousIFrame, formatChunkOffset[previousIFrame - 1])
@@ -690,7 +710,13 @@ for imageIndex in range(21):
                         tempData += data
                 else:
                     break
-            tempData, seiData = seiNalu.SEINaluKeyframeSeparate(tempData)
+
+            if iFrameData[4] == 0x06:
+                tempData, seiData = naluUtil.SEINaluKeyframeSeparate(tempData)
+            else:
+                tempData = naluUtil.sampleNaluSeparate(
+                    tempData, videoSampleOfChunk[previousIFrame - 1]
+                )
             if iFrameData[4] == 0x41 and seiData != b"":
                 iFrameData = (
                     tempData + h264Sign + seiData[4:] + h264Sign + iFrameData[4:]
@@ -698,7 +724,8 @@ for imageIndex in range(21):
             else:
                 iFrameData = tempData + h264Sign + iFrameData[4:]
         else:
-            iFrameData, _ = seiNalu.SEINaluKeyframeSeparate(iFrameData)
+            if iFrameData[4] == 0x06:
+                iFrameData, _ = naluUtil.SEINaluKeyframeSeparate(iFrameData)
 
             iFrameData = h264Sign + iFrameData
 
@@ -707,6 +734,7 @@ for imageIndex in range(21):
         f.write(videoSPS + videoPPS + h264Sign + iFrameData[4:])
     # 使用 FFmpeg 将 H264 数据解码为 jpg 数据
     subprocess.run(["ffmpeg", "-y", "-i", "demo.h264", f"temp-{imageIndex}-%03d.jpg"])
+    # exit(0)
 
 
 # n位数不足补0
