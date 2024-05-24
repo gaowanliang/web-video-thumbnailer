@@ -1,6 +1,8 @@
 # Web Video Thumbnailer
 For a web video that can be downloaded in segments, it is possible to create an overview of the video by downloading only a small amount of binary data.
 
+[Explanation of Fundamentals](https://stackoverflow.com/questions/21223749/using-chunks-of-mp4-file-for-thumbnails/78460294#78460294)
+
 ![](img/merged_image.webp)
 
 # requirements
